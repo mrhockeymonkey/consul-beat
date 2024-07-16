@@ -1,0 +1,9 @@
+services:
+  consul:
+    image: hashicorp/consul:1.12.9
+    volumes:
+      - /tmp:/var/log
+    ports:
+      - "8500:8500"
+      - "8600:8600"
+    command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0 -log-file=/var/log/ -log-level=debug -log-rotate-duration=24h"

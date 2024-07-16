@@ -1,0 +1,65 @@
+2024-07-15T21:22:44.262Z [WARN]  agent: BootstrapExpect is set to 1; this is the same as Bootstrap mode.
+2024-07-15T21:22:44.262Z [WARN]  agent: bootstrap = true: do not enable unless necessary
+2024-07-15T21:22:44.271Z [WARN]  agent.auto_config: BootstrapExpect is set to 1; this is the same as Bootstrap mode.
+2024-07-15T21:22:44.272Z [WARN]  agent.auto_config: bootstrap = true: do not enable unless necessary
+2024-07-15T21:22:44.303Z [INFO]  agent.server.raft: initial configuration: index=1 servers="[{Suffrage:Voter ID:be06a11f-9581-0b29-df3c-f3274dadc562 Address:172.18.0.2:8300}]"
+2024-07-15T21:22:44.304Z [INFO]  agent.server.raft: entering follower state: follower="Node at 172.18.0.2:8300 [Follower]" leader=
+2024-07-15T21:22:44.304Z [INFO]  agent.server.serf.wan: serf: EventMemberJoin: server-1.dc1 172.18.0.2
+2024-07-15T21:22:44.305Z [WARN]  agent.server.serf.wan: serf: Failed to re-join any previously known node
+2024-07-15T21:22:44.305Z [INFO]  agent.server.serf.lan: serf: EventMemberJoin: server-1 172.18.0.2
+2024-07-15T21:22:44.305Z [INFO]  agent.router: Initializing LAN area manager
+2024-07-15T21:22:44.306Z [WARN]  agent.server.serf.lan: serf: Failed to re-join any previously known node
+2024-07-15T21:22:44.306Z [INFO]  agent.server: Adding LAN server: server="server-1 (Addr: tcp/172.18.0.2:8300) (DC: dc1)"
+2024-07-15T21:22:44.307Z [INFO]  agent.server.autopilot: reconciliation now disabled
+2024-07-15T21:22:44.307Z [WARN]  agent: [core]grpc: addrConn.createTransport failed to connect to {dc1-172.18.0.2:8300 server-1 <nil> 0 <nil>}. Err: connection error: desc = "transport: Error while dialing dial tcp <nil>->172.18.0.2:8300: operation was canceled". Reconnecting...
+2024-07-15T21:22:44.307Z [INFO]  agent.server: Handled event for server in area: event=member-join server=server-1.dc1 area=wan
+2024-07-15T21:22:44.307Z [WARN]  agent: [core]grpc: addrConn.createTransport failed to connect to {dc1-172.18.0.2:8300 server-1 <nil> 0 <nil>}. Err: connection error: desc = "transport: Error while dialing dial tcp <nil>->172.18.0.2:8300: operation was canceled". Reconnecting...
+2024-07-15T21:22:44.308Z [DEBUG] agent.server.autopilot: autopilot is now running
+2024-07-15T21:22:44.309Z [DEBUG] agent.server.autopilot: state update routine is now running
+2024-07-15T21:22:44.310Z [INFO]  agent: Started DNS server: address=0.0.0.0:8600 network=tcp
+2024-07-15T21:22:44.310Z [INFO]  agent: Started DNS server: address=0.0.0.0:8600 network=udp
+2024-07-15T21:22:44.311Z [INFO]  agent: Starting server: address=[::]:8500 network=tcp protocol=http
+2024-07-15T21:22:44.312Z [INFO]  agent: started state syncer
+2024-07-15T21:22:44.312Z [INFO]  agent: Consul agent running!
+2024-07-15T21:22:50.261Z [WARN]  agent.server.raft: heartbeat timeout reached, starting election: last-leader=
+2024-07-15T21:22:50.262Z [INFO]  agent.server.raft: entering candidate state: node="Node at 172.18.0.2:8300 [Candidate]" term=4
+2024-07-15T21:22:50.275Z [DEBUG] agent.server.raft: votes: needed=1
+2024-07-15T21:22:50.276Z [DEBUG] agent.server.raft: vote granted: from=be06a11f-9581-0b29-df3c-f3274dadc562 term=4 tally=1
+2024-07-15T21:22:50.276Z [INFO]  agent.server.raft: election won: tally=1
+2024-07-15T21:22:50.276Z [INFO]  agent.server.raft: entering leader state: leader="Node at 172.18.0.2:8300 [Leader]"
+2024-07-15T21:22:50.276Z [INFO]  agent.server: cluster leadership acquired
+2024-07-15T21:22:50.276Z [INFO]  agent.server: New leader elected: payload=server-1
+2024-07-15T21:22:50.299Z [INFO]  agent.server.autopilot: reconciliation now enabled
+2024-07-15T21:22:50.301Z [INFO]  agent.leader: started routine: routine="federation state anti-entropy"
+2024-07-15T21:22:50.301Z [INFO]  agent.leader: started routine: routine="federation state pruning"
+2024-07-15T21:22:50.301Z [DEBUG] agent.server: successfully established leadership: duration=2.157255ms
+2024-07-15T21:22:50.436Z [DEBUG] agent: Skipping remote check since it is managed automatically: check=serfHealth
+2024-07-15T21:22:50.443Z [INFO]  agent: Synced node info
+2024-07-15T21:22:50.443Z [DEBUG] agent: Node info in sync
+2024-07-15T21:22:51.496Z [DEBUG] agent: Skipping remote check since it is managed automatically: check=serfHealth
+2024-07-15T21:22:51.496Z [DEBUG] agent: Node info in sync
+2024-07-15T21:23:03.423Z [INFO]  agent: Caught: signal=terminated
+2024-07-15T21:23:03.423Z [INFO]  agent: Graceful shutdown disabled. Exiting
+2024-07-15T21:23:03.423Z [INFO]  agent: Requesting shutdown
+2024-07-15T21:23:03.424Z [INFO]  agent.server: shutting down server
+2024-07-15T21:23:03.424Z [INFO]  agent.leader: stopping routine: routine="federation state anti-entropy"
+2024-07-15T21:23:03.424Z [INFO]  agent.leader: stopping routine: routine="federation state pruning"
+2024-07-15T21:23:03.424Z [WARN]  agent.server.serf.lan: serf: Shutdown without a Leave
+2024-07-15T21:23:03.424Z [DEBUG] agent.server.usage_metrics: usage metrics reporter shutting down
+2024-07-15T21:23:03.424Z [ERROR] agent.server: error performing anti-entropy sync of federation state: error="context canceled"
+2024-07-15T21:23:03.424Z [INFO]  agent.leader: stopped routine: routine="federation state anti-entropy"
+2024-07-15T21:23:03.424Z [INFO]  agent.leader: stopping routine: routine="federation state pruning"
+2024-07-15T21:23:03.424Z [INFO]  agent.leader: stopped routine: routine="federation state pruning"
+2024-07-15T21:23:03.424Z [DEBUG] agent.server.autopilot: state update routine is now stopped
+2024-07-15T21:23:03.424Z [DEBUG] agent.server.autopilot: autopilot is now stopped
+2024-07-15T21:23:03.424Z [WARN]  agent.server.serf.wan: serf: Shutdown without a Leave
+2024-07-15T21:23:03.425Z [INFO]  agent.router.manager: shutting down
+2024-07-15T21:23:03.425Z [INFO]  agent.router.manager: shutting down
+2024-07-15T21:23:03.426Z [INFO]  agent: consul server down
+2024-07-15T21:23:03.426Z [INFO]  agent: shutdown complete
+2024-07-15T21:23:03.426Z [INFO]  agent: Stopping server: protocol=DNS address=0.0.0.0:8600 network=tcp
+2024-07-15T21:23:03.426Z [INFO]  agent: Stopping server: protocol=DNS address=0.0.0.0:8600 network=udp
+2024-07-15T21:23:03.426Z [INFO]  agent: Stopping server: address=[::]:8500 network=tcp protocol=http
+2024-07-15T21:23:03.428Z [INFO]  agent: Waiting for endpoints to shut down
+2024-07-15T21:23:03.428Z [INFO]  agent: Endpoints down
+2024-07-15T21:23:03.428Z [INFO]  agent: Exit code: code=1
