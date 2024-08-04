@@ -4,7 +4,7 @@
 
 ```bash
 mkdir /tmp/consul
-chmod 0+w /tmp/consul
+chmod o+w /tmp/consul
 docker compose up
 ```
 
