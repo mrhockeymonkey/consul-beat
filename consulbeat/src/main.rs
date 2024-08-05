@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter, write};
 use std::fs::{DirEntry, File};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
@@ -17,8 +18,10 @@ use nom::error::Error;
 use nom::sequence::{terminated, tuple};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use sentry_handler::{init_sentry};
-use crate::sentry_handler::handle_log;
+use WatcherEvent::{NewLogEntry, NoActivity};
+use crate::sentry_handler::{handle_log, handle_parse_fail};
 use crate::log_watcher::{LogDirWatcher, WatcherEvent};
+use crate::log_watcher::WatcherEvent::NoFileFound;
 
 mod sentry_handler;
 mod log_watcher;
@@ -30,7 +33,8 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     
     let sentry_dsn = env::var(SENTRY_DSN)
-        .map_err(|_| AppError::MissingEnvVar(SENTRY_DSN.to_string()))?;     
+        .map_err(|_| AppError::MissingEnvVar(SENTRY_DSN.to_string()))?;
+    
     let log_dir = env::var(CONSUL_LOG_DIR).unwrap_or("/var/log".to_string()); 
 
     let _guard = init_sentry(&sentry_dsn)
@@ -43,86 +47,21 @@ fn main() -> color_eyre::Result<()> {
 
     for event in watcher {
         match event {
-            Ok(WatcherEvent::NewLogEntry(log)) => {
-                println!("{}", log);
-                match parse_line(log.value()) {
+            Ok(NewLogEntry(file, log)) => {
+                println!("{}: {}", file.display(), *log);
+                match parse_line(&log) { 
                     Ok(consul_log) => handle_log(consul_log),
-                    Err(e) => println!("Failed to parse log, {}", e)
+                    Err(e) => {
+                        println!("Failed to parse log, {}", e);
+                        handle_parse_fail(&log);
+                    }
                 }
             },
-            Ok(WatcherEvent::NoActivity) => println!("no activity"),
+            Ok(NoActivity(file)) => println!("{}: ... no activity ...", file.display()),
+            Ok(NoFileFound) => println!("... no log files found ..."),
             Err(e) => println!("{}", e)
         }
     }
-
-    // let (tx,rx) = mpsc::channel();
-    // let watcher = LogDirWatcher {channel: tx, path: "/tmp/consul".to_string()};
-    // watcher.watch().unwrap();
-    //
-    // // get the latest log file and seek to the end
-    // let current_log = get_latest("/tmp/consul").unwrap();
-    // let file = File::open(current_log.path.clone()).unwrap();
-    // let mut reader = BufReader::new(file);
-    // reader.seek(SeekFrom::End(0)).unwrap();
-    //
-    //
-    // loop {
-    //     let mut buf = "".to_string();
-    //     match reader.read_line(&mut buf){
-    //         Ok(0) => println!("finished reading {:?}", current_log.path.display()),
-    //         Ok(_) => println!("read: {}", buf),
-    //         Err(e) => println!("Error: {}", e)
-    //     }
-    //
-    //     match rx.recv_timeout(core::time::Duration::from_secs(1)) {
-    //         Ok(latest) => println!("Latest is {}", latest.path.display()),
-    //         Err(mpsc::RecvTimeoutError::Timeout) => println!("No update, continue to read file"),
-    //         Err(mpsc::RecvTimeoutError::Disconnected) => println!("Something went wrong"),
-    //     }
-    // }
-
-    // wait
-
-    // for received in rx {
-    //     println!("{}", received.path.display())
-    // }
-
-    //read_file("/tmp/consul");
-    // let f = fs::read_dir("/tmp/consul")
-    //     .and_then(|items| items
-    //         .map(|x| x
-    //             .map(|y| y.path()))
-    //         .collect::<Result<Vec<_>, io::Error>>());
-    //         // .collect::<Vec<_>>());
-    //
-    // if let Ok(paths) = f {
-    //     for x in paths {
-    //         dbg!(x);
-    //     }
-    // }
-
-    //read_file("/home/scott/code/consul-beat/consul-1721078564262596963.log", core::time::Duration::from_secs(5));
-    //println!("hello")
-
-    //
-    // let file = File::open("/home/scott/code/consul-beat/consul-1721078564262596963.log").unwrap();
-    // let reader = BufReader::new(file);
-    //
-    // for line in reader.lines() {
-    //     if let Ok(line) = line {
-            // if let Some(log) = parse_line(line.as_str()){
-            //     dbg!(&log);
-            //     handle_log(log);
-            // }
-    //
-    //         println!("Line: {}", line);
-    //
-    //         match parse_line(line.as_str()) {
-    //             Ok(log) => handle_log(log),
-    //             Err(e) => println!("Error: {}", e)
-    //         }
-    //     }
-    // }
     
     Ok(())
 }

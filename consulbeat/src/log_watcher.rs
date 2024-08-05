@@ -1,40 +1,46 @@
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{fs, io, thread, time};
+use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::fmt::{Formatter, write};
 use std::fs::{DirEntry, File};
 use std::io::{BufRead, BufReader, Error, Seek, SeekFrom};
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::SystemTime;
 use crate::log_watcher::WatcherEvent::NoActivity;
 
 pub struct LogDirWatcher {
-    tx: Sender<LogFile>,
-    rx: Receiver<LogFile>,
+    tx: Sender<Option<LogFile>>,
+    rx: Receiver<Option<LogFile>>,
     path: String,
-    reader: BufReader<File>,
-    curr: LogFile,
-    next: LogFile
+    reader: Option<RefCell<BufReader<File>>>,
+    curr: Option<LogFile>,
+    next: Option<LogFile>
 }
 
 impl LogDirWatcher {
 
     pub fn new(path: &str) -> io::Result<Self> {
-        let (tx,rx) = mpsc::channel();
+        let (tx, rx) = mpsc::channel();
 
-        let current_log = Self::get_latest(path)?;
-        let file = File::open(current_log.path.clone())?;
-
-        let mut reader = BufReader::new(file);
-        reader.seek(SeekFrom::End(0))?;
+        let mut current_log = Self::get_latest(path)?;
+        
+        let reader = if let Some(ref cl) = current_log {
+            let file = File::open(&cl.path)?;
+            let mut r = BufReader::new(file);
+            r.seek(SeekFrom::End(0))?;
+            Some(RefCell::new(r))
+        } else { None };
 
         Ok(
-            Self { 
-                tx, rx, 
-                path: path.to_string(), 
-                reader, 
-                curr: current_log.clone(), 
-                next: current_log
+            Self {
+                tx, rx,
+                path: path.to_string(),
+                reader,
+                curr: current_log,
+                next: None
             }
         )
     }
@@ -45,11 +51,11 @@ impl LogDirWatcher {
         thread::spawn(move || loop {
             thread::sleep(time::Duration::from_secs(5));
             let latest = Self::get_latest(&path).unwrap();
-            tx.send(latest).unwrap()
+            tx.send(latest).unwrap() // todo
         });
     }
 
-    fn get_latest(path: &str) -> io::Result<LogFile> {
+    fn get_latest(path: &str) -> io::Result<Option<LogFile>> {
         let mut files = fs::read_dir(path)
             .and_then(|items| items
                 .map(|x| x
@@ -58,14 +64,13 @@ impl LogDirWatcher {
 
         files.sort();
 
-        Ok(files.last().unwrap().clone())
+        Ok(files.into_iter().last())
     }
 }
 
 #[derive(Debug)]
 pub enum WatcherError {
     IOError(std::io::Error),
-    //TimeoutError(mpsc::RecvTimeoutError),
     DisconnectedError()
 }
 
@@ -83,13 +88,14 @@ impl std::fmt::Display for WatcherError
 }
 
 #[derive(Debug)]
-pub enum WatcherEvent<`a> {
+pub enum WatcherEvent {
     NewLogEntry(PathBuf, Log),
-    NoActivity(&PathBuf)
+    NoActivity(PathBuf),
+    NoFileFound
 }
 
 impl Iterator for LogDirWatcher {
-    type Item = Result<WatcherEvent, WatcherError>; // enum? log or waiting
+    type Item = Result<WatcherEvent, WatcherError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut buf = "".to_string();
@@ -100,82 +106,70 @@ impl Iterator for LogDirWatcher {
             Err(TryRecvError::Empty) => {},
             Err(TryRecvError::Disconnected) => return Some(Err(WatcherError::DisconnectedError()))
         };
-
-        let has_rolled_over = self.curr != self.next;
-
-        let event = match self.reader.read_line(&mut buf){
-
-            Ok(0) => {
-                if has_rolled_over {
-                    let file = File::open(self.next.path.clone()).unwrap();
-                    self.curr = self.next.clone();
-                    self.reader = BufReader::new(file);
-                }
+        
+        // get the current log and reader
+        let (current_log, current_reader) = match &self.curr {
+            None => {
                 thread::sleep(core::time::Duration::from_secs(1));
-                Ok(NoActivity(&self.curr.path))
+                return Some(Ok(WatcherEvent::NoFileFound))
             },
-            // Ok(0) => // read to the end of log
-            //     match self.rx.recv_timeout(core::time::Duration::from_secs(1)) {
-            //         Ok(latest) => {
-            //             // TODO ensure old file i completely read here
-            //             let file = File::open(latest.path.clone()).unwrap();
-            //
-            //             self.curr = latest;
-            //             self.reader = BufReader::new(file);
-            //
-            //             //println!("Latest is {}", latest.path.display());
-            //             Ok(WatcherEvent::NoActivity)
-            //         },
-            //         Err(mpsc::RecvTimeoutError::Timeout) => Ok(WatcherEvent::NoActivity),
-            //         Err(mpsc::RecvTimeoutError::Disconnected) => Err(WatcherError::DisconnectedError()),
-            // },
+            Some(cl) => match &self.reader {
+                Some(cr) => (cl, cr),
+                None => {
+                    if let Ok(file) = File::open(&cl.path) {
+                        let cr = RefCell::new(BufReader::new(file));
+                        self.reader = Some(cr);
+                        (cl, self.reader.as_ref().unwrap())
+                    } else { return Some(Ok(WatcherEvent::NoFileFound)) } // lies but im tired
+                }
+            }
+        };
+
+        // check to see if the log has rolled over
+        let has_rolled_over = self.next.as_ref()
+            .map(|n| current_log.path != n.path)
+            .unwrap_or(false);
+
+        let read = current_reader.borrow_mut().read_line(&mut buf);
+        let event = match read {
+            Ok(0) => {
+                // there is no more data to read
+                let path = current_log.path.clone();
+                if has_rolled_over {
+                    self.curr = self.next.clone();
+                    self.reader = None;
+                }
+                thread::sleep(core::time::Duration::from_secs(1)); // why?
+                Ok(NoActivity(path))
+            },
             Ok(_) => {
-                let log = Log::new(self.curr.path.clone(), buf);
-                Ok(WatcherEvent::NewLogEntry(self.curr.path, log))
+                // we have read a line from the log
+                Ok(WatcherEvent::NewLogEntry(current_log.path.clone(), Log(buf)))
             },
             Err(e) => Err(WatcherError::IOError(e))
         };
-
-        // match self.rx.recv_timeout(core::time::Duration::from_secs(1)) {
-        //     Ok(latest) => println!("Latest is {}", latest.path.display()),
-        //     Err(mpsc::RecvTimeoutError::Timeout) => println!("No update, continue to read file"),
-        //     Err(mpsc::RecvTimeoutError::Disconnected) => println!("Something went wrong"),
-        // }
 
         Some(event)
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Log {
-    path: PathBuf,
-    value: String
-}
+pub struct Log(String);
 
-impl Log {
-    fn new(path: PathBuf, value: String) -> Self {
-        Self {
-            path,
-            value
-        }
-    }
-    
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-}
+impl Deref for Log {
+    type Target = String;
 
-impl std::fmt::Display for Log {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.path.display(), self.value)
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 
-#[derive(Clone, Ord, Eq, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 struct LogFile {
     path: PathBuf,
-    modified: SystemTime
+    modified: SystemTime,
+    //reader: BufReader<File>
 }
 
 impl TryFrom<DirEntry> for LogFile {
@@ -188,7 +182,7 @@ impl TryFrom<DirEntry> for LogFile {
 
         Ok(Self {
             path: value.path(),
-            modified
+            modified,
         })
     }
 }

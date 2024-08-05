@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use sentry::ClientInitGuard;
+use sentry::protocol::Value;
 use sentry::types::{Dsn, ParseDsnError};
 use crate::{ConsulLog, LogLevel};
 
@@ -20,9 +21,20 @@ pub fn handle_log(log: ConsulLog) {
         LogLevel::Warn => sentry::Level::Warning,
         LogLevel::Error => sentry::Level::Error,
     };
-    
-    // this could be made configurable but unlikely to ever want info of debug
+
+    // this could be made configurable but unlikely to ever want info or debug
     if matches!(sentry_level, sentry::Level::Warning | sentry::Level::Error | sentry::Level::Fatal) {
         sentry::capture_message(&log.message, sentry_level);
     }
+}
+
+pub fn handle_parse_fail(log: &str) {
+    let message = format!("Failed to parse consul log! {}", log);
+    sentry::with_scope(
+        |scope| {
+            scope.set_extra("log_message", Value::String(log.to_string()));
+            scope.set_fingerprint(Some(&["parse-error"])); // to group all parse errors together
+        },
+        || sentry::capture_message(&message, sentry::Level::Warning)
+    );
 }
