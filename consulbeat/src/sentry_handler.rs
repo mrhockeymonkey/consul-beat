@@ -1,11 +1,17 @@
+use std::str::FromStr;
 use sentry::ClientInitGuard;
+use sentry::protocol::Value;
+use sentry::types::{Dsn, ParseDsnError};
 use crate::{ConsulLog, LogLevel};
 
-pub fn init_sentry() -> ClientInitGuard {
-    sentry::init(("https://6dac55d0f55700fcf00ea6fd04920923@o4507607687102464.ingest.de.sentry.io/4507607691886672", sentry::ClientOptions {
+pub fn init_sentry(dsn: &str) -> Result<ClientInitGuard, ParseDsnError> {
+    let sentry_dsn = Dsn::from_str(dsn)?;
+    let guard = sentry::init(sentry::ClientOptions {
+        dsn: Some(sentry_dsn),
         release: sentry::release_name!(),
         ..Default::default()
-    }))
+    });
+    Ok(guard)
 }
 
 pub fn handle_log(log: ConsulLog) {
@@ -15,5 +21,20 @@ pub fn handle_log(log: ConsulLog) {
         LogLevel::Warn => sentry::Level::Warning,
         LogLevel::Error => sentry::Level::Error,
     };
-    sentry::capture_message(&log.message, sentry_level);
+
+    // this could be made configurable but unlikely to ever want info or debug
+    if matches!(sentry_level, sentry::Level::Warning | sentry::Level::Error | sentry::Level::Fatal) {
+        sentry::capture_message(&log.message, sentry_level);
+    }
+}
+
+pub fn handle_parse_fail(log: &str) {
+    let message = format!("Failed to parse consul log! {}", log);
+    sentry::with_scope(
+        |scope| {
+            scope.set_extra("log_message", Value::String(log.to_string()));
+            scope.set_fingerprint(Some(&["parse-error"])); // to group all parse errors together
+        },
+        || sentry::capture_message(&message, sentry::Level::Warning)
+    );
 }

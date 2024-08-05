@@ -1,9 +1,30 @@
+volumes:
+  logs:
 services:
+
+  consulbeat:
+    build:
+      context: ./consulbeat
+    environment:
+      SENTRY_DSN:
+      SENTRY_ENVIRONMENT: QA
+      CONSUL_LOG_DIR: /var/log/consul
+    volumes:
+      - /tmp/consul:/var/log/consul:ro
+
   consul:
     image: hashicorp/consul:1.12.9
     volumes:
-      - /tmp:/var/log
+      - /tmp/consul:/var/log
     ports:
       - "8500:8500"
       - "8600:8600"
-    command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0 -log-file=/var/log/ -log-level=debug -log-rotate-duration=24h"
+    command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0 -log-file=/var/log/ -log-level=debug -log-rotate-duration=30s"
+    depends_on:
+      - pesky-script
+
+  pesky-script:
+    image: busybox
+    command: "/bin/sh -c 'while true; do wget -O - http://consul:8500/v1/health/node/server-1?dc=dc-0; sleep 3; done'"
+    depends_on:
+      - consul
