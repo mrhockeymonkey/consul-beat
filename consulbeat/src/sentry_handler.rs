@@ -2,7 +2,8 @@ use std::str::FromStr;
 use sentry::ClientInitGuard;
 use sentry::protocol::Value;
 use sentry::types::{Dsn, ParseDsnError};
-use crate::{ConsulLog, LogLevel};
+
+use crate::log_parsing::{ConsulLog, ConsulLogLevel};
 
 pub fn init_sentry(dsn: &str) -> Result<ClientInitGuard, ParseDsnError> {
     let sentry_dsn = Dsn::from_str(dsn)?;
@@ -15,16 +16,16 @@ pub fn init_sentry(dsn: &str) -> Result<ClientInitGuard, ParseDsnError> {
 }
 
 pub fn handle_log(log: ConsulLog) {
-    let sentry_level = match log.level {
-        LogLevel::Debug => sentry::Level::Debug,
-        LogLevel::Info => sentry::Level::Info,
-        LogLevel::Warn => sentry::Level::Warning,
-        LogLevel::Error => sentry::Level::Error,
+    let sentry_level = match log.level() {
+        ConsulLogLevel::Debug => sentry::Level::Debug,
+        ConsulLogLevel::Info => sentry::Level::Info,
+        ConsulLogLevel::Warn => sentry::Level::Warning,
+        ConsulLogLevel::Error => sentry::Level::Error,
     };
 
     // this could be made configurable but unlikely to ever want info or debug
     if matches!(sentry_level, sentry::Level::Warning | sentry::Level::Error | sentry::Level::Fatal) {
-        sentry::capture_message(&log.message, sentry_level);
+        sentry::capture_message(&log.message(), sentry_level);
     }
 }
 

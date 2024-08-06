@@ -1,16 +1,52 @@
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{fs, io, thread, time};
 use std::cell::RefCell;
-use std::cmp::Ordering;
-use std::fmt::{Formatter, write};
+use std::fmt::Formatter;
 use std::fs::{DirEntry, File};
-use std::io::{BufRead, BufReader, Error, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::mpsc;
 use std::time::SystemTime;
+
 use crate::log_watcher::WatcherEvent::NoActivity;
 
+/// A single log line read from a file
+#[derive(Debug, Eq, PartialEq)]
+pub struct Log(String);
+
+impl Deref for Log {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// A single log file within the specified log dir
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+struct LogFile {
+    path: PathBuf,
+    modified: SystemTime // TODO do we need this?
+}
+
+impl TryFrom<DirEntry> for LogFile {
+    type Error = io::Error;
+
+    fn try_from(value: DirEntry) -> Result<Self, Self::Error> {
+        let modified =  value
+            .metadata()?
+            .modified()?;
+
+        Ok(Self {
+            path: value.path(),
+            modified,
+        })
+    }
+}
+
+/// Watches for all files in a given directory and can be iterated through
+/// to receive log events as they occur
 pub struct LogDirWatcher {
     tx: Sender<Option<LogFile>>,
     rx: Receiver<Option<LogFile>>,
@@ -25,9 +61,10 @@ impl LogDirWatcher {
     pub fn new(path: &str) -> io::Result<Self> {
         let (tx, rx) = mpsc::channel();
 
-        let mut current_log = Self::get_latest(path)?;
+        let current_log = Self::get_latest(path)?;
         
         let reader = if let Some(ref cl) = current_log {
+            // when starting to watch a dir, we want to start from the latest current log
             let file = File::open(&cl.path)?;
             let mut r = BufReader::new(file);
             r.seek(SeekFrom::End(0))?;
@@ -46,12 +83,12 @@ impl LogDirWatcher {
     }
 
     pub fn watch(&self) {
-        let tx = self.tx.clone(); // ???
+        let tx = self.tx.clone();
         let path = self.path.clone();
         thread::spawn(move || loop {
             thread::sleep(time::Duration::from_secs(5));
             let latest = Self::get_latest(&path).unwrap();
-            tx.send(latest).unwrap() // todo
+            tx.send(latest).unwrap() // TODO im not sure how better to handle this other than printing a message?
         });
     }
 
@@ -60,7 +97,7 @@ impl LogDirWatcher {
             .and_then(|items| items
                 .map(|x| x
                     .and_then(|y| LogFile::try_from(y)))
-                .collect::<Result<Vec<_>, _>>())?;
+                .collect::<Result<Vec<LogFile>, _>>())?;
 
         files.sort();
 
@@ -70,7 +107,7 @@ impl LogDirWatcher {
 
 #[derive(Debug)]
 pub enum WatcherError {
-    IOError(std::io::Error),
+    IOError(io::Error),
     DisconnectedError()
 }
 
@@ -81,7 +118,6 @@ impl std::fmt::Display for WatcherError
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             WatcherError::IOError(io) => write!(f, "IO error: {}", io),
-            //WatcherError::TimeoutError(e) => write!(f, "Timeout error: {}", e),
             WatcherError::DisconnectedError() => write!(f, "Disconnected error!")
         }
     }
@@ -153,36 +189,3 @@ impl Iterator for LogDirWatcher {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Log(String);
-
-impl Deref for Log {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-struct LogFile {
-    path: PathBuf,
-    modified: SystemTime,
-    //reader: BufReader<File>
-}
-
-impl TryFrom<DirEntry> for LogFile {
-    type Error = io::Error;
-
-    fn try_from(value: DirEntry) -> Result<Self, Self::Error> {
-        let modified =  value
-            .metadata()?
-            .modified()?;
-
-        Ok(Self {
-            path: value.path(),
-            modified,
-        })
-    }
-}

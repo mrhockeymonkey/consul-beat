@@ -18,5 +18,7 @@ docker compose up --build consulbeat
 ## TODO
 
 - factor & clean
+- - neaten up log watch duration
+- - test working in docker
 - Add support for setting SENTRY_ENVIRONMENT (env var does work automatically?)
 - Include DC as additional data
