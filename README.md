@@ -15,8 +15,7 @@ export SENTRY_DSN="<your dsn here>"
 docker compose up --build consulbeat
 ```
 
-## TODO
+## Possible Future Improvements
 
-- factor & clean
-- Add support for setting SENTRY_ENVIRONMENT (env var does work automatically?)
-- Include DC as additional data
+- Call v1/agent/self to get metadata about the local consul instance
+- Send parsed logs into ELK or use Open Telemetry
