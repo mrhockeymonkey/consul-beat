@@ -1,4 +1,4 @@
-use std::{fs, io, thread, time};
+use std::{fs, io, thread};
 use std::cell::RefCell;
 use std::fmt::Formatter;
 use std::fs::{DirEntry, File};
@@ -7,9 +7,12 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::mpsc;
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
 
 use crate::log_watcher::WatcherEvent::NoActivity;
+
+const FIVE_SECONDS: Duration = Duration::from_secs(5);
+const ONE_SECONDS: Duration = Duration::from_secs(1);
 
 /// A single log line read from a file
 #[derive(Debug, Eq, PartialEq)]
@@ -85,10 +88,15 @@ impl LogDirWatcher {
     pub fn watch(&self) {
         let tx = self.tx.clone();
         let path = self.path.clone();
-        thread::spawn(move || loop {
-            thread::sleep(time::Duration::from_secs(5));
-            let latest = Self::get_latest(&path).unwrap();
-            tx.send(latest).unwrap() // TODO im not sure how better to handle this other than printing a message?
+        thread::spawn(move || {
+            loop {
+                thread::sleep(FIVE_SECONDS);
+                match Self::get_latest(&path) {
+                    Ok(latest_log_file) => tx.send(latest_log_file)
+                        .unwrap_or_else(|e| eprintln!("Failed to send message to receiver! Error was {}", e)),
+                    Err(e) => eprintln!("Failed to detect latest log file! Error was {}", e)
+                }
+            }
         });
     }
 
@@ -134,8 +142,7 @@ impl Iterator for LogDirWatcher {
     type Item = Result<WatcherEvent, WatcherError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut buf = "".to_string();
-
+        
         // keep next log file up to date from watcher thread
         match self.rx.try_recv() {
             Ok(current) => self.next = current,
@@ -146,17 +153,21 @@ impl Iterator for LogDirWatcher {
         // get the current log and reader
         let (current_log, current_reader) = match &self.curr {
             None => {
-                thread::sleep(core::time::Duration::from_secs(1));
+                // there is no current file so wait for one to appear instead of spinning
+                thread::sleep(ONE_SECONDS);
                 return Some(Ok(WatcherEvent::NoFileFound))
             },
             Some(cl) => match &self.reader {
                 Some(cr) => (cl, cr),
                 None => {
-                    if let Ok(file) = File::open(&cl.path) {
-                        let cr = RefCell::new(BufReader::new(file));
-                        self.reader = Some(cr);
-                        (cl, self.reader.as_ref().unwrap())
-                    } else { return Some(Ok(WatcherEvent::NoFileFound)) } // lies but im tired
+                    // we have a log but no reader yet so try to create one
+                    match File::open(&cl.path) {
+                        Ok(file) => {
+                            self.reader = Some(RefCell::new(BufReader::new(file)));
+                            (cl, self.reader.as_ref().expect("We should have a guaranteed reader at this point!"))
+                        },
+                        Err(e) => return Some(Err(WatcherError::IOError(e)))
+                    }
                 }
             }
         };
@@ -166,16 +177,21 @@ impl Iterator for LogDirWatcher {
             .map(|n| current_log.path != n.path)
             .unwrap_or(false);
 
+        let mut buf = "".to_string();
         let read = current_reader.borrow_mut().read_line(&mut buf);
         let event = match read {
             Ok(0) => {
-                // there is no more data to read
+                // there is no more data to read, check if there is a new log
                 let path = current_log.path.clone();
+                
                 if has_rolled_over {
                     self.curr = self.next.clone();
                     self.reader = None;
                 }
-                thread::sleep(core::time::Duration::from_secs(1)); // why?
+                else {
+                    thread::sleep(ONE_SECONDS);
+                }
+
                 Ok(NoActivity(path))
             },
             Ok(_) => {

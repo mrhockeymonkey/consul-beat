@@ -13,6 +13,7 @@ mod log_watcher;
 mod log_parsing;
 
 const SENTRY_DSN: &str = "SENTRY_DSN";
+const SENTRY_ENVIRONMENT: &str = "SENTRY_ENVIRONMENT";
 const CONSUL_LOG_DIR: &str = "CONSUL_LOG_DIR";
 
 fn main() -> color_eyre::Result<()> {
@@ -21,14 +22,17 @@ fn main() -> color_eyre::Result<()> {
     let sentry_dsn = env::var(SENTRY_DSN)
         .map_err(|_| AppError::MissingEnvVar(SENTRY_DSN.to_string()))?;
     
+    let sentry_env = env::var(SENTRY_ENVIRONMENT).unwrap_or("development".to_string());
+
     let log_dir = env::var(CONSUL_LOG_DIR).unwrap_or("/var/log".to_string()); 
 
-    let _guard = init_sentry(&sentry_dsn)
+    let _guard = init_sentry(&sentry_dsn, &sentry_env)
         .map_err(|_| AppError::BadSentryDsn)?;
 
     let watcher = LogDirWatcher::new(&log_dir)
         .map_err(|io| AppError::WatcherFailed(io))?;
     
+    println!("Begin watching '{}' for environment '{}'", &log_dir, &sentry_env);
     _ = watcher.watch();
 
     for event in watcher {

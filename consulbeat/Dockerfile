@@ -12,6 +12,7 @@ RUN rm src/main.rs
 # compile binary
 COPY .. .
 RUN cargo build --release
+#CMD ["./target/release/consulbeat"]
 
 FROM debian:bookworm-slim
 

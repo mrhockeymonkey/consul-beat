@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::str::FromStr;
 use sentry::ClientInitGuard;
 use sentry::protocol::Value;
@@ -5,10 +6,12 @@ use sentry::types::{Dsn, ParseDsnError};
 
 use crate::log_parsing::{ConsulLog, ConsulLogLevel};
 
-pub fn init_sentry(dsn: &str) -> Result<ClientInitGuard, ParseDsnError> {
+pub fn init_sentry(dsn: &str, env: &str) -> Result<ClientInitGuard, ParseDsnError> {
     let sentry_dsn = Dsn::from_str(dsn)?;
     let guard = sentry::init(sentry::ClientOptions {
         dsn: Some(sentry_dsn),
+        environment: Some(Cow::Owned(String::from(env))),
+        debug: true,
         release: sentry::release_name!(),
         ..Default::default()
     });
