@@ -3,16 +3,16 @@ use nom::bytes::complete::{tag, take_until1, take_while1};
 use nom::error::{Error, ErrorKind};
 use nom::Err::Failure;
 use nom::{Finish, IResult};
-use nom::character::complete::{alpha1, alphanumeric1, char, digit1, line_ending};
+use nom::character::complete::{alpha1, char, digit1};
 use nom::combinator::map_res;
 use nom::sequence::{terminated, tuple};
 
 /// Represent a single log line from Consul, parsed into components
 #[derive(Debug)]
 pub struct ConsulLog {
-    timestamp: DateTime<Utc>,
+    _timestamp: DateTime<Utc>,
     level: ConsulLogLevel,
-    sub_sys: String,
+    _sub_sys: String,
     message: String
 }
 
@@ -45,9 +45,9 @@ pub fn parse_line(input: &str) -> Result<ConsulLog, Error<&str>> {
         &space,
         parse_system
     ))(input).finish().map(|(remaining, (timestamp, _, level, _, sub_sys))| ConsulLog {
-        timestamp,
+        _timestamp: timestamp,
         level,
-        sub_sys: String::from(sub_sys),
+        _sub_sys: String::from(sub_sys),
         message: String::from(remaining)
     });
 
@@ -103,8 +103,4 @@ fn parse_system(input: &str) -> IResult<&str, &str> {
         tag(":")
     )(input)?;
     Ok((input, system))
-}
-
-fn take_until_eol(input: &str) -> IResult<&str, &str> {
-    terminated(alphanumeric1, line_ending)(input)
 }
